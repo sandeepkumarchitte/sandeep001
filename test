@@ -1,1 +1,63 @@
-test1
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: httpd-config
+data:
+  app.conf: |-
+    <VirtualHost *:8443>
+       ProxyPreserveHost On
+       ProxyRequests On
+       ProxyVia On
+       ServerName httpd
+       ServerAlias {{ manifest.name }}.{{ manifest.ingress_domain }}
+       ServerAlias httpd.{{ manifest.name }}.svc.icp.bankofthewest.com
+       ServerAlias httpd.{{ manifest.name }}
+       ServerAlias httpd.{{ manifest.name }}.svc
+       ServerAlias localhost
+       ServerAlias 127.0.0.1
+       ErrorLog /opt/httpd/logs/error_log
+       TransferLog /opt/httpd/logs/access_log
+       LogLevel debug
+       SSLEngine on
+       SSLProxyEngine on
+       SSLProxyVerify require
+       SSLProxyProtocol -all +TLSv1.2
+       SSLProtocol -all +TLSv1.2
+       SSLCipherSuite !aNULL:!eNULL:!LOW:!DES:!3DES:!RC4:!MD5:!EXP:!PSK:!SRP:!DSS:!ADH:!IDEA:!SEED:HIGH
+       SSLHonorCipherOrder On
+       SSLCertificateFile /opt/httpd/tls/tls.crt
+       SSLProxyCACertificateFile /opt/httpd/tls/tls.crt
+       SSLCertificateKeyFile /opt/httpd/tls/tls.key
+       SSLVerifyDepth 5
+       Header set Cache-Control "private, no-cache, no-store"
+       Header set Pragma "no-cache"
+       Header set X-XSS-Protection "1; mode=block"
+       Header set X-Content-Type-Options "nosniff"
+       Header always edit Set-Cookie ^(.*)$ $1;HttpOnly;Secure
+
+       RewriteEngine On
+       ProxyBadHeader StartBody
+       LimitRequestBody 10388608
+
+       RewriteCond %{QUERY_STRING} ^(.*)action=postFile(.*)$
+       #RewriteRule "^/(.*)" "https://av-0.antivirus.lav-dev:8080/$1" [QSA,P,L]
+       #ProxyPassReverse / https://av-0.antivirus.lav-dev:8080/
+       RewriteRule "^/(.*)" "https://httpd.lav-dev.svc:8443/$1" [QSA,P,L]
+       ProxyPassReverse / https://httpd.lav-dev.svc:8443/
+
+       RewriteEngine On
+       ProxyBadHeader StartBody
+       RewriteCond %{QUERY_STRING} !^(.*)action=postFile(.*)$
+       RewriteRule "^/(.*)" "https://liferay-{{ manifest.name }}-0.liferay:8443" route=liferay-{{ manifest.name }}-0/$1" [QSA,P,L]
+       ProxyPassReverse / "https://liferay-{{ manifest.name }}-0.liferay:8443" route=liferay-{{ manifest.name }}-0"
+
+       <Location />
+            SSLOptions +StdEnvVars
+            SSLRenegBufferSize 10486000
+            Order allow,deny
+            Allow from all
+            Require all granted
+       </Location>
+    </VirtualHost>
